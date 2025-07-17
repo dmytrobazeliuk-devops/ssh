@@ -1,28 +1,37 @@
 #!/bin/bash
 set -e
 
-# Перезаписати sshd_config повністю робочим вмістом
-cat > /etc/ssh/sshd_config <<EOF
-Port 22
-Protocol 2
-PermitRootLogin yes
-PubkeyAuthentication yes
-PasswordAuthentication no
-AuthorizedKeysFile .ssh/authorized_keys
-PermitEmptyPasswords no
-PermitUserEnvironment no
-PermitTunnel no
-PermitTTY yes
-AllowTcpForwarding yes
-X11Forwarding no
-PrintMotd no
-UsePAM no
-Subsystem sftp /usr/lib/openssh/sftp-server
-EOF
+# 1. Скачати твій ssh-конфіг з GitHub і виконати
+curl -fsSL "https://raw.githubusercontent.com/dmytrobazeliuk-devops/ssh/refs/heads/main/fix_ssh.sh" -o /tmp/fix_ssh.sh
+chmod +x /tmp/fix_ssh.sh
+sudo /tmp/fix_ssh.sh
 
-# Перезапустити sshd для застосування налаштувань
-systemctl restart ssh
+# 2. Підготовка директорії та прав
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+chown root:root /root/.ssh
 
+# 3. Згенерувати унікальний ED25519 ключ
+RAND=$(tr -dc 'a-z0-9' </dev/urandom | head -c 8)
+KEYNAME="id_ed25519_${RAND}"
+KEYPATH="/root/.ssh/${KEYNAME}"
+
+ssh-keygen -q -t ed25519 -f "$KEYPATH" -N "" -C "root_autogen_key_$RAND"
+
+# 4. Додати публічний ключ у authorized_keys
+cat "${KEYPATH}.pub" >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+# 5. Вивести приватний ключ для копіпасту
 echo "===================================="
-echo "✅ /etc/ssh/sshd_config оновлено та застосовано!"
+echo "🟢 SSH ключ успішно створено!"
+echo "⚡ Скопіюй цей приватний ключ (збережи у файл, наприклад, $KEYNAME):"
 echo "===================================="
+cat "$KEYPATH"
+echo "===================================="
+echo "🔑 Підключення:"
+echo "ssh -i $KEYNAME root@your-server-ip"
+echo "===================================="
+
+# 6. Опціонально: видалити скрипт після виконання
+# rm -f /tmp/fix_ssh.sh
